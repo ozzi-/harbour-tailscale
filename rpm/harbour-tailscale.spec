@@ -11,7 +11,7 @@ Name:       harbour-tailscale
 %{?qtc_builddir:%define _builddir %qtc_builddir}
 Summary:    tailscale
 Version:    0.0.14
-Release:    2
+Release:    3
 Group:      Qt/Qt
 License:    MIT
 URL:        https://scarpino.dev

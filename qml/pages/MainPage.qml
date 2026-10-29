@@ -171,7 +171,7 @@ Page {
             width: listView.width
             contentHeight: innerColumn.implicitHeight + Theme.paddingLarge * 2
 
-            onClicked: pageStack.push("DevicePage.qml", {
+            onClicked: pageStack.push(Qt.resolvedUrl("DevicePage.qml"), {
                 "hostname": model.hostname,
                 "nodeIp": model.ip
             })
