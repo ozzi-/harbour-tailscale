@@ -59,6 +59,39 @@ QString Client::getStatus() const
     return QString(cmd.readAllStandardOutput());
 }
 
+QString Client::getStatusJson() const
+{
+    QProcess cmd;
+    cmd.start(QStringLiteral("/usr/bin/tailscale"),
+              QStringList() << QStringLiteral("status") << QStringLiteral("--json"));
+    cmd.setProcessChannelMode(QProcess::MergedChannels);
+    cmd.waitForFinished();
+
+    return QString(cmd.readAllStandardOutput());
+}
+
+QString Client::ping(const QString &address) const
+{
+    QProcess cmd;
+    cmd.start(QStringLiteral("/usr/bin/tailscale"),
+              QStringList() << QStringLiteral("ping")
+                            << QStringLiteral("--c=1")
+                            << QStringLiteral("--timeout=5s")
+                            << address);
+    cmd.setProcessChannelMode(QProcess::MergedChannels);
+    cmd.waitForFinished(15000);
+
+    // "pong from name (ip) via relay in 12.3ms" — extract the latency, empty on failure
+    const QString output(cmd.readAllStandardOutput());
+    static const QRegularExpression latencyRegexp(QStringLiteral("in ([0-9]+(?:\\.[0-9]+)?[a-zµ]+)\\s*$"));
+    const QRegularExpressionMatch match = latencyRegexp.match(output);
+    if (match.hasMatch()) {
+        return match.captured(1);
+    }
+
+    return QString();
+}
+
 void Client::up()
 {
     m_cmd = new QProcess(this);

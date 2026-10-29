@@ -171,6 +171,11 @@ Page {
             width: listView.width
             contentHeight: innerColumn.implicitHeight + Theme.paddingLarge * 2
 
+            onClicked: pageStack.push("DevicePage.qml", {
+                "hostname": model.hostname,
+                "nodeIp": model.ip
+            })
+
             menu: model.isExitNode && !model.isSelf ? exitNodeMenu : null
 
             ContextMenu {

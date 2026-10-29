@@ -14,7 +14,9 @@ public:
 
     Q_INVOKABLE void down();
     Q_INVOKABLE QString getStatus() const;
+    Q_INVOKABLE QString getStatusJson() const;
     Q_INVOKABLE bool isUp() const;
+    Q_INVOKABLE QString ping(const QString &address) const;
     Q_INVOKABLE QString getVersion() const;
     Q_INVOKABLE void up();
     Q_INVOKABLE bool acceptRoutes() const;
