@@ -63,6 +63,9 @@ fi
 # >> build pre
 # << build pre
 
+# mb2 skips the spec's prep section, so unpack the tailscale binaries here
+[ -d %{_sourcedir}/%{tailscale_dir} ] || tar xf %{_sourcedir}/%{tailscale_dir}.tgz -C %{_sourcedir}
+
 cd %{_builddir}/%{name}-%{version}
 qmake Tailscale.pro
 make
