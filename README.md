@@ -1,28 +1,27 @@
 # Tailscale
 
-[Sailfish OS](https://sailfishos.org) UI for [Tailscale](https://tailscale.com/).
+[Sailfish OS](https://sailfishos.org) UI for [Tailscale](https://tailscale.com/). A Sailfish OS application.
 
-This application uses **root** privileges to run as this is needed to start `tailscale` with root privileges. This is a security risk!
+## Origin
+
+Original application by [Andrea Scarpino](https://scarpino.dev):
+<https://github.com/ilpianista/harbour-Tailscale>, MIT license.
+
+This application uses **root** privileges, as this is needed to run `tailscale` with root privileges. This is a security risk!
 
 This project **IS NOT** endorsed by Tailscale Inc.
 
-## Install
+## Why this fork exists
 
-Install via [OpenRepos](https://openrepos.net/content/ilpianista/tailscale).
+A fork of the original app with additional features:
+
+- _(none yet)_
 
 ## Translations
 
 [![Translation status](https://hosted.weblate.org/widgets/harbour-tailscale/-/svg-badge.svg)](https://hosted.weblate.org/engage/harbour-tailscale/?utm_source=widget)
 
 Translations via [Weblate](https://hosted.weblate.org/projects/harbour-tailscale/), thank you!
-
-## Donate
-
-The SailfishOS Community Team is on Liberapay:
-
-[![Liberapay receiving](https://img.shields.io/liberapay/receives/SailfishOScommunityTeam?logo=liberapay&label=SailfishOSCommunity)](https://liberapay.com/SailfishOScommunityTeam)
-
-[![Liberapay receiving](https://img.shields.io/liberapay/receives/ilpianista?logo=liberapay&label=ilpianista)](https://liberapay.com/ilpianista)
 
 ## License
 

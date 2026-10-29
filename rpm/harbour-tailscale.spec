@@ -63,9 +63,9 @@ fi
 # >> build pre
 # << build pre
 
-%qtc_qmake5
-
-%qtc_make %{?_smp_mflags}
+cd %{_builddir}/%{name}-%{version}
+qmake Tailscale.pro
+make
 
 # >> build post
 # << build post
@@ -74,7 +74,8 @@ fi
 rm -rf %{buildroot}
 # >> install pre
 # << install pre
-%qmake5_install
+cd %{_builddir}/%{name}-%{version}
+make INSTALL_ROOT=%{buildroot} install
 
 # >> install post
 install -d %{buildroot}%{_unitdir}
