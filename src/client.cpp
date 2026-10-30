@@ -24,7 +24,9 @@
 
 #include "client.h"
 
+#include <QClipboard>
 #include <QDir>
+#include <QGuiApplication>
 #include <QProcess>
 #include <QRegularExpression>
 #include <QRegularExpressionMatch>
@@ -103,7 +105,10 @@ void Client::cancelPing()
 }
 
 namespace {
-    // "pong from name (ip) via DERP(x) in 151ms" → latency + whether relayed
+    // tailscale 1.104 output, both cases use "via":
+    //   direct: "pong from name (ip) via [endpoint]:41641 in 4ms"
+    //   relay:  "pong from name (ip) via DERP(fra) in 151ms"
+    // → relayed iff the line mentions a DERP node, NOT iff it contains "via"
     bool parsePingLine(const QString &line, double &ms, bool &relayed)
     {
         if (!line.startsWith(QStringLiteral("pong")))
@@ -111,7 +116,7 @@ namespace {
         static const QRegularExpression re(QStringLiteral(" in ([0-9]+(?:\\.[0-9]+)?)\\s*ms"));
         const QRegularExpressionMatch m = re.match(line);
         ms = m.hasMatch() ? m.captured(1).toDouble() : 0.0;
-        relayed = line.contains(QStringLiteral(" via "));
+        relayed = line.contains(QStringLiteral("DERP"));
         return true;
     }
 } // namespace
@@ -183,6 +188,12 @@ void Client::onUpReadyRead()
     if (match.hasMatch()) {
         Q_EMIT loginRequest(match.captured(1));
     }
+}
+
+void Client::copyToClipboard(const QString &text)
+{
+    if (QGuiApplication::clipboard())
+        QGuiApplication::clipboard()->setText(text);
 }
 
 void Client::down()

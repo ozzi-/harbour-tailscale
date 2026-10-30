@@ -25,6 +25,7 @@ public:
     Q_INVOKABLE void applyAcceptRoutes();
     Q_INVOKABLE void setExitNode(const QString &node);
     Q_INVOKABLE void unsetExitNode();
+    Q_INVOKABLE void copyToClipboard(const QString &text);
 
 Q_SIGNALS:
     void loginRequest(QString url);
