@@ -75,7 +75,17 @@ Page {
 
     header: PageHeader {
         title: page.hostname
-        BackButton {}
+
+        IconButton {
+            id: backButton
+            anchors {
+                left: parent.left
+                verticalCenter: parent.verticalCenter
+            }
+            icon.source: "image://theme/icon-m-back"
+
+            onClicked: pageStack.pop()
+        }
     }
 
     ViewPlaceholder {
@@ -195,7 +205,7 @@ Page {
                 }
             }
 
-            SilicaButton {
+            Button {
                 id: pingButton
                 width: parent.width
                 text: qsTr("Ping")
@@ -214,7 +224,7 @@ Page {
                 horizontalAlignment: Text.AlignHCenter
                 text: page.pingResult !== "" ? page.pingResult : qsTr("Unreachable")
                 font.pixelSize: Theme.fontSizeMedium
-                color: page.pingResult !== "" ? Theme.primaryColor : Theme.errorColor
+                color: page.pingResult !== "" ? Theme.primaryColor : Theme.secondaryColor
             }
         }
 
