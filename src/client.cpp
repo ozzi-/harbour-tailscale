@@ -45,6 +45,7 @@ QString settingsFilePath()
 Client::Client(QObject *parent)
     : QObject(parent)
     , m_cmd(0)
+    , m_ping(0)
 {}
 
 Client::~Client() {}
@@ -70,26 +71,88 @@ QString Client::getStatusJson() const
     return QString(cmd.readAllStandardOutput());
 }
 
-QString Client::ping(const QString &address) const
+void Client::startPing(const QString &address, int count)
 {
-    QProcess cmd;
-    cmd.start(QStringLiteral("/usr/bin/tailscale"),
-              QStringList() << QStringLiteral("ping")
-                            << QStringLiteral("--c=1")
-                            << QStringLiteral("--timeout=5s")
-                            << address);
-    cmd.setProcessChannelMode(QProcess::MergedChannels);
-    cmd.waitForFinished(15000);
+    cancelPing();
+    m_pingBuffer.clear();
 
-    // "pong from name (ip) via relay in 12.3ms" — extract the latency, empty on failure
-    const QString output(cmd.readAllStandardOutput());
-    static const QRegularExpression latencyRegexp(QStringLiteral("in ([0-9]+(?:\\.[0-9]+)?[a-zµ]+)\\s*$"));
-    const QRegularExpressionMatch match = latencyRegexp.match(output);
-    if (match.hasMatch()) {
-        return match.captured(1);
+    m_ping = new QProcess(this);
+    m_ping->setProcessChannelMode(QProcess::MergedChannels);
+    connect(m_ping, &QProcess::readyReadStandardOutput, this, &Client::onPingReadyRead);
+    connect(m_ping, (void (QProcess::*)(int)) &QProcess::finished, this, &Client::onPingFinished);
+
+    // --until-direct=false: force ALL <count> pings. By default `tailscale ping`
+    // stops as soon as a direct (non-DERP) path is found, which would give far
+    // fewer samples than requested (we saw "1 of 10" on relayed links).
+    m_ping->start(QStringLiteral("/usr/bin/tailscale"),
+                  QStringList() << QStringLiteral("ping")
+                                << QStringLiteral("--c=%1").arg(count)
+                                << QStringLiteral("--until-direct=false")
+                                << QStringLiteral("--timeout=4s")
+                                << address);
+}
+
+void Client::cancelPing()
+{
+    if (m_ping) {
+        m_ping->kill();
+        m_ping->deleteLater();
+        m_ping = 0;
+    }
+    m_pingBuffer.clear();
+}
+
+namespace {
+    // "pong from name (ip) via DERP(x) in 151ms" → latency + whether relayed
+    bool parsePingLine(const QString &line, double &ms, bool &relayed)
+    {
+        if (!line.startsWith(QStringLiteral("pong")))
+            return false;
+        static const QRegularExpression re(QStringLiteral(" in ([0-9]+(?:\\.[0-9]+)?)\\s*ms"));
+        const QRegularExpressionMatch m = re.match(line);
+        ms = m.hasMatch() ? m.captured(1).toDouble() : 0.0;
+        relayed = line.contains(QStringLiteral(" via "));
+        return true;
+    }
+} // namespace
+
+void Client::onPingReadyRead()
+{
+    if (!m_ping)
+        return;
+
+    m_pingBuffer += QString::fromUtf8(m_ping->readAllStandardOutput());
+    int nl;
+    while ((nl = m_pingBuffer.indexOf(QLatin1Char('\n'))) != -1) {
+        const QString line = m_pingBuffer.left(nl).trimmed();
+        m_pingBuffer = m_pingBuffer.mid(nl + 1);
+
+        double ms = 0.0;
+        bool relayed = false;
+        if (parsePingLine(line, ms, relayed))
+            Q_EMIT pingSample(ms, relayed);
+    }
+}
+
+void Client::onPingFinished(int exitCode)
+{
+    Q_UNUSED(exitCode);
+
+    // Flush any trailing line that never received a newline
+    onPingReadyRead();
+    const QString line = m_pingBuffer.trimmed();
+    m_pingBuffer.clear();
+    double ms = 0.0;
+    bool relayed = false;
+    if (parsePingLine(line, ms, relayed))
+        Q_EMIT pingSample(ms, relayed);
+
+    if (m_ping) {
+        m_ping->deleteLater();
+        m_ping = 0;
     }
 
-    return QString();
+    Q_EMIT pingFinished();
 }
 
 void Client::up()

@@ -173,7 +173,8 @@ Page {
 
             onClicked: pageStack.push(Qt.resolvedUrl("DevicePage.qml"), {
                 "hostname": model.hostname,
-                "nodeIp": model.ip
+                "nodeIp": model.ip,
+                "isSelf": model.isSelf
             })
 
             menu: model.isExitNode && !model.isSelf ? exitNodeMenu : null
