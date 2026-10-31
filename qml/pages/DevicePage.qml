@@ -170,9 +170,16 @@ Page {
     SilicaFlickable {
         anchors.fill: parent
         visible: page.hasData
-        contentHeight: contentColumn.implicitHeight
-                        + Theme.pageHeaderHeight
-                        + Screen.topCutout.height
+        // pageHeader.height is the REAL rendered header height. Silica's
+        // PageHeader already folds Screen.topCutout (the camera notch) into
+        // its own top margin in portrait (_minimumTopMargin), so it must NOT
+        // be added a second time. Do NOT use Theme.pageHeaderHeight: that
+        // property DOES NOT EXIST in Silica 5.2 (verified: no such symbol in
+        // the .so, zero refs in the QML, probe returns undefined) — the old
+        // binding evaluated to NaN, silently failed, and content rendered
+        // at y=0 under the header/notch.
+        contentHeight: pageHeader.height
+                        + contentColumn.implicitHeight
                         + Theme.paddingLarge * 2
 
         Column {
@@ -180,11 +187,11 @@ Page {
             anchors {
                 left: parent.left
                 right: parent.right
-                top: parent.top
-                // Screen.topCutout.height = display notch, the same
-                // convention Silica's own PageHeader/Page use. Without it
-                // the first rows sit under the camera notch on the phone.
-                topMargin: Theme.pageHeaderHeight + Screen.topCutout.height + Theme.paddingLarge
+                // Anchor to the actual PageHeader item, not a Theme constant:
+                // pageHeader.height is always defined, and the header already
+                // reserves the notch area, so this clears the camera cutout.
+                top: pageHeader.bottom
+                topMargin: Theme.paddingLarge
                 leftMargin: Theme.horizontalPageMargin
                 rightMargin: Theme.horizontalPageMargin
             }
@@ -421,12 +428,14 @@ Page {
                 color: page.lastRelayed ? Theme.secondaryHighlightColor : Theme.highlightColor
             }
 
-            // Latency graph: fixed bars (one per ping slot). No Canvas —
-            // pure Rectangles, the same primitives that render everywhere
-            // else on this page.
-            // Bars hang DOWN from the top baseline (per user request):
-            // the top edge is 0 ms, the bottom edge is the max value, so
-            // the "slow" end of the chart is at the bottom.
+            // Latency graph: 10 fixed bars (one per ping slot). Pure
+            // Rectangles with explicit x + bottom anchor — NO Row (its
+            // baseline alignment silently bottom-aligned the bars and broke
+            // the intended layout), NO Repeater (JS-array model is broken on
+            // this Qt), NO Canvas.
+            // Orientation per user request: the duration grows toward the
+            // TOP — 0 ms baseline at the bottom, max ms at the top (the same
+            // chart as the Android Tailscale app).
             Item {
                 id: graphBox
                 width: contentColumn.width
@@ -441,51 +450,23 @@ Page {
                     return Math.max(10, Math.ceil(m));
                 }
 
+                function slotWidth() {
+                    return (plotArea.width - 9 * 8) / 10;
+                }
+
                 function barHeight(v) {
                     return Math.max(4, (v / graphBox.barMax()) * (plotArea.height - 8));
                 }
 
-                Row {
-                    id: legendRow
-                    anchors {
-                        bottom: parent.bottom
-                        left: parent.left
-                    }
-                    spacing: 6
-
-                    Rectangle {
-                        width: 8
-                        height: 8
-                        radius: 4
-                        anchors.verticalCenter: parent.verticalCenter
-                        color: Theme.highlightColor
-                    }
-                    Label {
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: qsTr("Direct")
-                        font.pixelSize: Theme.fontSizeSmall
-                        color: Theme.secondaryColor
-                    }
-                    Rectangle {
-                        width: 8
-                        height: 8
-                        radius: 4
-                        anchors.verticalCenter: parent.verticalCenter
-                        color: Theme.secondaryHighlightColor
-                    }
-                    Label {
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: qsTr("Relayed (DERP)")
-                        font.pixelSize: Theme.fontSizeSmall
-                        color: Theme.secondaryColor
-                    }
-                }
-
+                // Connection type is shown ONCE, by connLabel above the
+                // graph ("Direct connection" / "Relayed connection (via
+                // DERP)") — the old legend listed both types under the
+                // graph at the same time and contradicted connLabel, so it
+                // was removed.
                 Label {
                     id: maxLabel
                     anchors {
-                        bottom: legendRow.top
-                        bottomMargin: 6
+                        top: parent.top
                         left: parent.left
                     }
                     text: graphBox.barMax() + " ms"
@@ -499,128 +480,131 @@ Page {
                         left: parent.left
                         right: parent.right
                         top: parent.top
-                        bottom: maxLabel.top
-                        bottomMargin: 6
+                        topMargin: maxLabel.height + 6
+                        bottom: parent.bottom
                     }
                     color: "transparent"
 
-                    // Baseline at the TOP: bars hang from this line.
                     Rectangle {
                         anchors { top: parent.top; left: parent.left; right: parent.right }
                         height: 1
-                        color: Theme.rgba(Theme.primaryColor, 0.25)
+                        color: Theme.rgba(Theme.primaryColor, 0.12)
                     }
                     Rectangle {
                         anchors { verticalCenter: parent.verticalCenter; left: parent.left; right: parent.right }
                         height: 1
                         color: Theme.rgba(Theme.primaryColor, 0.12)
                     }
-                    // Bottom edge = the max-ms gridline (not a baseline).
+                    // Baseline at the BOTTOM (0 ms): bars grow UP from here.
                     Rectangle {
                         anchors { bottom: parent.bottom; left: parent.left; right: parent.right }
                         height: 1
-                        color: Theme.rgba(Theme.primaryColor, 0.12)
+                        color: Theme.rgba(Theme.primaryColor, 0.25)
                     }
 
-                    Row {
-                        id: barRow
-                        anchors {
-                            top: parent.top
-                            left: parent.left
-                        }
-                        width: parent.width
-                        spacing: 8
-
-                        // slot 0
-                        Rectangle {
-                            width: (barRow.width - 9 * barRow.spacing) / 10
-                            height: 0 < page.sampleCount ? graphBox.barHeight(page.graphData[0]) : 2
-                            visible: 0 < page.sampleCount
-                            radius: 3
-                            color: page.relayedData[0] === true
-                                ? Theme.secondaryHighlightColor : Theme.highlightColor
-                        }
-                        // slot 1
-                        Rectangle {
-                            width: (barRow.width - 9 * barRow.spacing) / 10
-                            height: 1 < page.sampleCount ? graphBox.barHeight(page.graphData[1]) : 2
-                            visible: 1 < page.sampleCount
-                            radius: 3
-                            color: page.relayedData[1] === true
-                                ? Theme.secondaryHighlightColor : Theme.highlightColor
-                        }
-                        // slot 2
-                        Rectangle {
-                            width: (barRow.width - 9 * barRow.spacing) / 10
-                            height: 2 < page.sampleCount ? graphBox.barHeight(page.graphData[2]) : 2
-                            visible: 2 < page.sampleCount
-                            radius: 3
-                            color: page.relayedData[2] === true
-                                ? Theme.secondaryHighlightColor : Theme.highlightColor
-                        }
-                        // slot 3
-                        Rectangle {
-                            width: (barRow.width - 9 * barRow.spacing) / 10
-                            height: 3 < page.sampleCount ? graphBox.barHeight(page.graphData[3]) : 2
-                            visible: 3 < page.sampleCount
-                            radius: 3
-                            color: page.relayedData[3] === true
-                                ? Theme.secondaryHighlightColor : Theme.highlightColor
-                        }
-                        // slot 4
-                        Rectangle {
-                            width: (barRow.width - 9 * barRow.spacing) / 10
-                            height: 4 < page.sampleCount ? graphBox.barHeight(page.graphData[4]) : 2
-                            visible: 4 < page.sampleCount
-                            radius: 3
-                            color: page.relayedData[4] === true
-                                ? Theme.secondaryHighlightColor : Theme.highlightColor
-                        }
-                        // slot 5
-                        Rectangle {
-                            width: (barRow.width - 9 * barRow.spacing) / 10
-                            height: 5 < page.sampleCount ? graphBox.barHeight(page.graphData[5]) : 2
-                            visible: 5 < page.sampleCount
-                            radius: 3
-                            color: page.relayedData[5] === true
-                                ? Theme.secondaryHighlightColor : Theme.highlightColor
-                        }
-                        // slot 6
-                        Rectangle {
-                            width: (barRow.width - 9 * barRow.spacing) / 10
-                            height: 6 < page.sampleCount ? graphBox.barHeight(page.graphData[6]) : 2
-                            visible: 6 < page.sampleCount
-                            radius: 3
-                            color: page.relayedData[6] === true
-                                ? Theme.secondaryHighlightColor : Theme.highlightColor
-                        }
-                        // slot 7
-                        Rectangle {
-                            width: (barRow.width - 9 * barRow.spacing) / 10
-                            height: 7 < page.sampleCount ? graphBox.barHeight(page.graphData[7]) : 2
-                            visible: 7 < page.sampleCount
-                            radius: 3
-                            color: page.relayedData[7] === true
-                                ? Theme.secondaryHighlightColor : Theme.highlightColor
-                        }
-                        // slot 8
-                        Rectangle {
-                            width: (barRow.width - 9 * barRow.spacing) / 10
-                            height: 8 < page.sampleCount ? graphBox.barHeight(page.graphData[8]) : 2
-                            visible: 8 < page.sampleCount
-                            radius: 3
-                            color: page.relayedData[8] === true
-                                ? Theme.secondaryHighlightColor : Theme.highlightColor
-                        }
-                        // slot 9
-                        Rectangle {
-                            width: (barRow.width - 9 * barRow.spacing) / 10
-                            height: 9 < page.sampleCount ? graphBox.barHeight(page.graphData[9]) : 2
-                            visible: 9 < page.sampleCount
-                            radius: 3
-                            color: page.relayedData[9] === true
-                                ? Theme.secondaryHighlightColor : Theme.highlightColor
-                        }
+                    // 10 fixed bars, each individually positioned: explicit
+                    // x, bottom-anchored, growing UP. No Row: Row baseline
+                    // alignment made "anchored" bars render bottom-aligned
+                    // and broke the intended layout in 0.0.14-9.
+                    // slot 0
+                    Rectangle {
+                        anchors.bottom: parent.bottom
+                        x: 0 * (graphBox.slotWidth() + 8)
+                        width: graphBox.slotWidth()
+                        height: 0 < page.sampleCount ? graphBox.barHeight(page.graphData[0]) : 2
+                        visible: 0 < page.sampleCount
+                        radius: 3
+                        color: Theme.highlightColor
+                    }
+                    // slot 1
+                    Rectangle {
+                        anchors.bottom: parent.bottom
+                        x: 1 * (graphBox.slotWidth() + 8)
+                        width: graphBox.slotWidth()
+                        height: 1 < page.sampleCount ? graphBox.barHeight(page.graphData[1]) : 2
+                        visible: 1 < page.sampleCount
+                        radius: 3
+                        color: Theme.highlightColor
+                    }
+                    // slot 2
+                    Rectangle {
+                        anchors.bottom: parent.bottom
+                        x: 2 * (graphBox.slotWidth() + 8)
+                        width: graphBox.slotWidth()
+                        height: 2 < page.sampleCount ? graphBox.barHeight(page.graphData[2]) : 2
+                        visible: 2 < page.sampleCount
+                        radius: 3
+                        color: Theme.highlightColor
+                    }
+                    // slot 3
+                    Rectangle {
+                        anchors.bottom: parent.bottom
+                        x: 3 * (graphBox.slotWidth() + 8)
+                        width: graphBox.slotWidth()
+                        height: 3 < page.sampleCount ? graphBox.barHeight(page.graphData[3]) : 2
+                        visible: 3 < page.sampleCount
+                        radius: 3
+                        color: Theme.highlightColor
+                    }
+                    // slot 4
+                    Rectangle {
+                        anchors.bottom: parent.bottom
+                        x: 4 * (graphBox.slotWidth() + 8)
+                        width: graphBox.slotWidth()
+                        height: 4 < page.sampleCount ? graphBox.barHeight(page.graphData[4]) : 2
+                        visible: 4 < page.sampleCount
+                        radius: 3
+                        color: Theme.highlightColor
+                    }
+                    // slot 5
+                    Rectangle {
+                        anchors.bottom: parent.bottom
+                        x: 5 * (graphBox.slotWidth() + 8)
+                        width: graphBox.slotWidth()
+                        height: 5 < page.sampleCount ? graphBox.barHeight(page.graphData[5]) : 2
+                        visible: 5 < page.sampleCount
+                        radius: 3
+                        color: Theme.highlightColor
+                    }
+                    // slot 6
+                    Rectangle {
+                        anchors.bottom: parent.bottom
+                        x: 6 * (graphBox.slotWidth() + 8)
+                        width: graphBox.slotWidth()
+                        height: 6 < page.sampleCount ? graphBox.barHeight(page.graphData[6]) : 2
+                        visible: 6 < page.sampleCount
+                        radius: 3
+                        color: Theme.highlightColor
+                    }
+                    // slot 7
+                    Rectangle {
+                        anchors.bottom: parent.bottom
+                        x: 7 * (graphBox.slotWidth() + 8)
+                        width: graphBox.slotWidth()
+                        height: 7 < page.sampleCount ? graphBox.barHeight(page.graphData[7]) : 2
+                        visible: 7 < page.sampleCount
+                        radius: 3
+                        color: Theme.highlightColor
+                    }
+                    // slot 8
+                    Rectangle {
+                        anchors.bottom: parent.bottom
+                        x: 8 * (graphBox.slotWidth() + 8)
+                        width: graphBox.slotWidth()
+                        height: 8 < page.sampleCount ? graphBox.barHeight(page.graphData[8]) : 2
+                        visible: 8 < page.sampleCount
+                        radius: 3
+                        color: Theme.highlightColor
+                    }
+                    // slot 9
+                    Rectangle {
+                        anchors.bottom: parent.bottom
+                        x: 9 * (graphBox.slotWidth() + 8)
+                        width: graphBox.slotWidth()
+                        height: 9 < page.sampleCount ? graphBox.barHeight(page.graphData[9]) : 2
+                        visible: 9 < page.sampleCount
+                        radius: 3
+                        color: Theme.highlightColor
                     }
                 }
             }
