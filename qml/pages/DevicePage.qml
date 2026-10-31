@@ -57,6 +57,15 @@ Page {
     // 0=dns 1=ipv4 2=ipv6, -1=none. Drives the "Copied" caption flash.
     property int copiedRow: -1
 
+    // Single source of truth for the content's top offset. The 140px
+    // floor GUARANTEES the first rows clear the header + camera notch
+    // even if the header item's height ever evaluates small/zero; the
+    // header term keeps the content below a taller header. Do NOT use
+    // Theme.pageHeaderHeight (does not exist in Silica 5.2 → NaN → the
+    // whole binding silently fails → content renders at y=0; that is
+    // the -6..-10 cutoff bug).
+    readonly property real contentTop: Math.max(pageHeader.height + Theme.paddingLarge, 140)
+
     Timer {
         id: copyTimer
         interval: 1200
@@ -74,7 +83,15 @@ Page {
                 verticalCenter: parent.verticalCenter
             }
             icon.source: "image://theme/icon-m-back"
-            onClicked: pageStack.pop()
+            onClicked: {
+                // Going back must not leave a `tailscale ping` running in
+                // the background. (onDestroyed is NOT a valid handler in
+                // Qt 5.6 — compile error "non-existent property" — so the
+                // back button is the hook.)
+                if (page.pinging)
+                    client.cancelPing();
+                pageStack.pop()
+            }
         }
     }
 
@@ -170,28 +187,24 @@ Page {
     SilicaFlickable {
         anchors.fill: parent
         visible: page.hasData
-        // pageHeader.height is the REAL rendered header height. Silica's
-        // PageHeader already folds Screen.topCutout (the camera notch) into
-        // its own top margin in portrait (_minimumTopMargin), so it must NOT
-        // be added a second time. Do NOT use Theme.pageHeaderHeight: that
-        // property DOES NOT EXIST in Silica 5.2 (verified: no such symbol in
-        // the .so, zero refs in the QML, probe returns undefined) — the old
-        // binding evaluated to NaN, silently failed, and content rendered
-        // at y=0 under the header/notch.
-        contentHeight: pageHeader.height
+        // contentTop carries the guaranteed floor (see page.contentTop):
+        // the content can never end up at y=0 under the header/notch.
+        contentHeight: page.contentTop
                         + contentColumn.implicitHeight
-                        + Theme.paddingLarge * 2
+                        + Theme.paddingLarge
 
         Column {
             id: contentColumn
             anchors {
                 left: parent.left
                 right: parent.right
-                // Anchor to the actual PageHeader item, not a Theme constant:
-                // pageHeader.height is always defined, and the header already
-                // reserves the notch area, so this clears the camera cutout.
-                top: pageHeader.bottom
-                topMargin: Theme.paddingLarge
+                // top: parent.top + a CONSTANT-guaranteed margin (page.contentTop).
+                // No cross-item anchor, no Theme constant that might not exist:
+                // a failed binding here silently leaves the margin at 0 and
+                // the content renders at the very top of the screen (the bug
+                // that survived builds -6..-10).
+                top: parent.top
+                topMargin: page.contentTop
                 leftMargin: Theme.horizontalPageMargin
                 rightMargin: Theme.horizontalPageMargin
             }
@@ -463,6 +476,7 @@ Page {
                 // DERP)") — the old legend listed both types under the
                 // graph at the same time and contradicted connLabel, so it
                 // was removed.
+                // The per-bar ms labels (below) live in this bottom strip.
                 Label {
                     id: maxLabel
                     anchors {
@@ -482,6 +496,7 @@ Page {
                         top: parent.top
                         topMargin: maxLabel.height + 6
                         bottom: parent.bottom
+                        bottomMargin: 30   // per-bar ms label strip
                     }
                     color: "transparent"
 
@@ -606,6 +621,121 @@ Page {
                         radius: 3
                         color: Theme.highlightColor
                     }
+                }
+
+                // Per-bar ms labels, in the 30px strip BELOW the baseline
+                // (children of graphBox, not plotArea — anchoring them to
+                // plotArea's bottom would overlap the bars). One per slot,
+                // same x/width as the bar, shown once that ping arrived.
+                // slot 0
+                Label {
+                    anchors.bottom: parent.bottom
+                    x: 0 * (graphBox.slotWidth() + 8)
+                    width: graphBox.slotWidth()
+                    text: page.sampleCount > 0 ? Math.round(page.graphData[0]) + "" : ""
+                    horizontalAlignment: Text.AlignHCenter
+                    visible: page.sampleCount > 0
+                    font.pixelSize: Theme.fontSizeExtraSmall
+                    color: Theme.secondaryColor
+                }
+                // slot 1
+                Label {
+                    anchors.bottom: parent.bottom
+                    x: 1 * (graphBox.slotWidth() + 8)
+                    width: graphBox.slotWidth()
+                    text: page.sampleCount > 1 ? Math.round(page.graphData[1]) + "" : ""
+                    horizontalAlignment: Text.AlignHCenter
+                    visible: page.sampleCount > 1
+                    font.pixelSize: Theme.fontSizeExtraSmall
+                    color: Theme.secondaryColor
+                }
+                // slot 2
+                Label {
+                    anchors.bottom: parent.bottom
+                    x: 2 * (graphBox.slotWidth() + 8)
+                    width: graphBox.slotWidth()
+                    text: page.sampleCount > 2 ? Math.round(page.graphData[2]) + "" : ""
+                    horizontalAlignment: Text.AlignHCenter
+                    visible: page.sampleCount > 2
+                    font.pixelSize: Theme.fontSizeExtraSmall
+                    color: Theme.secondaryColor
+                }
+                // slot 3
+                Label {
+                    anchors.bottom: parent.bottom
+                    x: 3 * (graphBox.slotWidth() + 8)
+                    width: graphBox.slotWidth()
+                    text: page.sampleCount > 3 ? Math.round(page.graphData[3]) + "" : ""
+                    horizontalAlignment: Text.AlignHCenter
+                    visible: page.sampleCount > 3
+                    font.pixelSize: Theme.fontSizeExtraSmall
+                    color: Theme.secondaryColor
+                }
+                // slot 4
+                Label {
+                    anchors.bottom: parent.bottom
+                    x: 4 * (graphBox.slotWidth() + 8)
+                    width: graphBox.slotWidth()
+                    text: page.sampleCount > 4 ? Math.round(page.graphData[4]) + "" : ""
+                    horizontalAlignment: Text.AlignHCenter
+                    visible: page.sampleCount > 4
+                    font.pixelSize: Theme.fontSizeExtraSmall
+                    color: Theme.secondaryColor
+                }
+                // slot 5
+                Label {
+                    anchors.bottom: parent.bottom
+                    x: 5 * (graphBox.slotWidth() + 8)
+                    width: graphBox.slotWidth()
+                    text: page.sampleCount > 5 ? Math.round(page.graphData[5]) + "" : ""
+                    horizontalAlignment: Text.AlignHCenter
+                    visible: page.sampleCount > 5
+                    font.pixelSize: Theme.fontSizeExtraSmall
+                    color: Theme.secondaryColor
+                }
+                // slot 6
+                Label {
+                    anchors.bottom: parent.bottom
+                    x: 6 * (graphBox.slotWidth() + 8)
+                    width: graphBox.slotWidth()
+                    text: page.sampleCount > 6 ? Math.round(page.graphData[6]) + "" : ""
+                    horizontalAlignment: Text.AlignHCenter
+                    visible: page.sampleCount > 6
+                    font.pixelSize: Theme.fontSizeExtraSmall
+                    color: Theme.secondaryColor
+                }
+                // slot 7
+                Label {
+                    anchors.bottom: parent.bottom
+                    x: 7 * (graphBox.slotWidth() + 8)
+                    width: graphBox.slotWidth()
+                    text: page.sampleCount > 7 ? Math.round(page.graphData[7]) + "" : ""
+                    horizontalAlignment: Text.AlignHCenter
+                    visible: page.sampleCount > 7
+                    font.pixelSize: Theme.fontSizeExtraSmall
+                    color: Theme.secondaryColor
+                }
+                // slot 8
+                Label {
+                    anchors.bottom: parent.bottom
+                    x: 8 * (graphBox.slotWidth() + 8)
+                    width: graphBox.slotWidth()
+                    text: page.sampleCount > 8 ? Math.round(page.graphData[8]) + "" : ""
+                    horizontalAlignment: Text.AlignHCenter
+                    visible: page.sampleCount > 8
+                    font.pixelSize: Theme.fontSizeExtraSmall
+                    color: Theme.secondaryColor
+                }
+                // slot 9
+                Label {
+                    anchors.bottom: parent.bottom
+                    x: 9 * (graphBox.slotWidth() + 8)
+                    width: graphBox.slotWidth()
+                    text: page.sampleCount > 9 ? Math.round(page.graphData[9]) + "" : ""
+                    horizontalAlignment: Text.AlignHCenter
+                    visible: page.sampleCount > 9
+                    font.pixelSize: Theme.fontSizeExtraSmall
+                    color: Theme.secondaryColor
                 }
             }
 
