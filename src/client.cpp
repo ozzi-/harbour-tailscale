@@ -25,6 +25,7 @@
 #include "client.h"
 
 #include <QClipboard>
+#include <QDateTime>
 #include <QDir>
 #include <QGuiApplication>
 #include <QProcess>
@@ -49,12 +50,20 @@ QString settingsFilePath()
 // (no user journal files) and the app console goes nowhere visible,
 // so the ping start/cancel/finish path is logged to a plain file the
 // user can cat over SSH. Kept minimal on purpose.
+// Every line is timestamped (HH:mm:ss.mmm) and every cancelPing carries
+// a caller tag, so the log unambiguously shows WHICH path cancelled the
+// ping (back button vs stop button vs page destruction vs app suspend)
+// and WHEN. (In 0.0.14-12 the internal and back-button cancels were
+// indistinguishable, which made the "cancel doesn't work" report
+// impossible to diagnose from the log alone.)
 void pingLog(const QString &msg)
 {
     FILE *f = std::fopen("/tmp/harbour-tailscale-ping.log", "a");
     if (!f)
         return;
-    std::fprintf(f, "%s\n", msg.toUtf8().constData());
+    std::fprintf(f, "[%s] %s\n",
+                 QDateTime::currentDateTime().toString(QStringLiteral("HH:mm:ss.zzz")).toUtf8().constData(),
+                 msg.toUtf8().constData());
     std::fclose(f);
 }
 
@@ -64,12 +73,33 @@ Client::Client(QObject *parent)
     : QObject(parent)
     , m_cmd(0)
     , m_ping(0)
-{}
+{
+    // If the app leaves the foreground (user swiped to home / another
+    // app), a running `tailscale ping` must not keep running in the
+    // background — that is the path that leaked pings across page
+    // navigations in 0.0.14-12: the in-app back button was not the only
+    // way to leave the device page. Silica's ApplicationWindow binds
+    // `applicationActive` to Qt.application.active, so lipstick
+    // definitely drives these state changes on this Qt 5.6.
+    // Qt 5.6 has no qGuiApplication() function — only the qGuiApp macro
+    // (static_cast of QCoreApplication::instance()).
+    connect(qGuiApp, &QGuiApplication::applicationStateChanged,
+            this, &Client::onApplicationStateChanged);
+}
 
 Client::~Client()
 {
     // The app exiting must not leave a `tailscale ping` running.
-    cancelPing();
+    cancelPing(QStringLiteral("destructor"));
+}
+
+void Client::onApplicationStateChanged(Qt::ApplicationState state)
+{
+    if (state != Qt::ApplicationActive) {
+        pingLog(QString("applicationStateChanged: %1")
+                   .arg(static_cast<int>(state)));
+        cancelPing(QStringLiteral("app-suspended"));
+    }
 }
 
 QString Client::getStatus() const
@@ -95,7 +125,7 @@ QString Client::getStatusJson() const
 
 void Client::startPing(const QString &address, int count)
 {
-    cancelPing();
+    cancelPing(QStringLiteral("internal"));
     m_pingBuffer.clear();
     pingLog(QString("startPing: %1 count=%2").arg(address).arg(count));
 
@@ -115,7 +145,7 @@ void Client::startPing(const QString &address, int count)
                                 << address);
 }
 
-void Client::cancelPing()
+void Client::cancelPing(const QString &tag)
 {
     if (m_ping) {
         const qint64 pid = m_ping->processId();
@@ -129,14 +159,46 @@ void Client::cancelPing()
         // signal did not reach it.
         if (pid > 0)
             ::kill((pid_t)pid, SIGKILL);
-        pingLog(QString("cancelPing: pid=%1 wasRunning=%2 stateAfter=%3")
-                   .arg(pid).arg(wasRunning).arg((int)m_ping->state()));
+        pingLog(QString("cancelPing[%1]: pid=%2 wasRunning=%3 stateAfter=%4")
+                   .arg(tag).arg(pid).arg(wasRunning).arg((int)m_ping->state()));
         m_ping->deleteLater();
         m_ping = 0;
     } else {
-        pingLog("cancelPing: no ping process to cancel");
+        pingLog(QString("cancelPing[%1]: no ping process to cancel").arg(tag));
     }
     m_pingBuffer.clear();
+}
+
+bool Client::isAutostart() const
+{
+    QProcess cmd;
+    cmd.start(QStringLiteral("systemctl"),
+              QStringList() << QStringLiteral("is-enabled")
+                            << QStringLiteral("tailscaled.service"));
+    cmd.waitForFinished();
+    return cmd.exitCode() == 0
+        && cmd.readAllStandardOutput().trimmed() == QStringLiteral("enabled");
+}
+
+void Client::setAutostart(bool enabled)
+{
+    QProcess cmd;
+    cmd.start(QStringLiteral("systemctl"),
+              QStringList() << (enabled ? QStringLiteral("enable")
+                                        : QStringLiteral("disable"))
+                            << QStringLiteral("tailscaled.service"));
+    cmd.waitForFinished();
+
+    if (enabled) {
+        // Take effect immediately as well: start the daemon now if it is
+        // not running yet (the app may have been closed with the daemon
+        // stopped).
+        QProcess s;
+        s.start(QStringLiteral("systemctl"),
+                QStringList() << QStringLiteral("start")
+                              << QStringLiteral("tailscaled.service"));
+        s.waitForFinished();
+    }
 }
 
 namespace {

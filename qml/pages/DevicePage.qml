@@ -85,13 +85,12 @@ Page {
             icon.source: "image://theme/icon-m-back"
             onClicked: {
                 // Going back must not leave a `tailscale ping` running in
-                // the background. (onDestroyed is NOT a valid handler in
-                // Qt 5.6 — compile error "non-existent property" — so the
-                // back button is the hook.) cancelPing() is null-safe:
-                // it does nothing when no ping is running, so it is
-                // called UNCONDITIONALLY — gating on page.pinging added a
-                // failure mode for no benefit.
-                client.cancelPing();
+                // the background. cancelPing() is null-safe: it does
+                // nothing when no ping is running, so it is called
+                // UNCONDITIONALLY. The tag is written into the ping log
+                // so we can prove this path fired (in 0.0.14-12 the log
+                // could not distinguish it from the internal cancel).
+                client.cancelPing("back-button");
                 pageStack.pop()
             }
         }
@@ -398,7 +397,7 @@ Page {
                     text: page.pinging ? qsTr("Stop") : qsTr("Ping")
                     onClicked: {
                         if (page.pinging)
-                            client.cancelPing();
+                            client.cancelPing("stop-button");
                         else
                             page.startPing();
                     }
@@ -628,7 +627,7 @@ Page {
                     text: page.sampleCount > 0 ? Math.round(page.graphData[0]) + " ms" : ""
                     horizontalAlignment: Text.AlignHCenter
                     visible: page.sampleCount > 0
-                    font.pixelSize: Theme.fontSizeExtraSmall
+                    font.pixelSize: 16
                     color: Theme.secondaryColor
                 }
                 // slot 1
@@ -639,7 +638,7 @@ Page {
                     text: page.sampleCount > 1 ? Math.round(page.graphData[1]) + " ms" : ""
                     horizontalAlignment: Text.AlignHCenter
                     visible: page.sampleCount > 1
-                    font.pixelSize: Theme.fontSizeExtraSmall
+                    font.pixelSize: 16
                     color: Theme.secondaryColor
                 }
                 // slot 2
@@ -650,7 +649,7 @@ Page {
                     text: page.sampleCount > 2 ? Math.round(page.graphData[2]) + " ms" : ""
                     horizontalAlignment: Text.AlignHCenter
                     visible: page.sampleCount > 2
-                    font.pixelSize: Theme.fontSizeExtraSmall
+                    font.pixelSize: 16
                     color: Theme.secondaryColor
                 }
                 // slot 3
@@ -661,7 +660,7 @@ Page {
                     text: page.sampleCount > 3 ? Math.round(page.graphData[3]) + " ms" : ""
                     horizontalAlignment: Text.AlignHCenter
                     visible: page.sampleCount > 3
-                    font.pixelSize: Theme.fontSizeExtraSmall
+                    font.pixelSize: 16
                     color: Theme.secondaryColor
                 }
                 // slot 4
@@ -672,7 +671,7 @@ Page {
                     text: page.sampleCount > 4 ? Math.round(page.graphData[4]) + " ms" : ""
                     horizontalAlignment: Text.AlignHCenter
                     visible: page.sampleCount > 4
-                    font.pixelSize: Theme.fontSizeExtraSmall
+                    font.pixelSize: 16
                     color: Theme.secondaryColor
                 }
                 // slot 5
@@ -683,7 +682,7 @@ Page {
                     text: page.sampleCount > 5 ? Math.round(page.graphData[5]) + " ms" : ""
                     horizontalAlignment: Text.AlignHCenter
                     visible: page.sampleCount > 5
-                    font.pixelSize: Theme.fontSizeExtraSmall
+                    font.pixelSize: 16
                     color: Theme.secondaryColor
                 }
                 // slot 6
@@ -694,7 +693,7 @@ Page {
                     text: page.sampleCount > 6 ? Math.round(page.graphData[6]) + " ms" : ""
                     horizontalAlignment: Text.AlignHCenter
                     visible: page.sampleCount > 6
-                    font.pixelSize: Theme.fontSizeExtraSmall
+                    font.pixelSize: 16
                     color: Theme.secondaryColor
                 }
                 // slot 7
@@ -705,7 +704,7 @@ Page {
                     text: page.sampleCount > 7 ? Math.round(page.graphData[7]) + " ms" : ""
                     horizontalAlignment: Text.AlignHCenter
                     visible: page.sampleCount > 7
-                    font.pixelSize: Theme.fontSizeExtraSmall
+                    font.pixelSize: 16
                     color: Theme.secondaryColor
                 }
                 // slot 8
@@ -716,7 +715,7 @@ Page {
                     text: page.sampleCount > 8 ? Math.round(page.graphData[8]) + " ms" : ""
                     horizontalAlignment: Text.AlignHCenter
                     visible: page.sampleCount > 8
-                    font.pixelSize: Theme.fontSizeExtraSmall
+                    font.pixelSize: 16
                     color: Theme.secondaryColor
                 }
                 // slot 9
@@ -727,7 +726,7 @@ Page {
                     text: page.sampleCount > 9 ? Math.round(page.graphData[9]) + " ms" : ""
                     horizontalAlignment: Text.AlignHCenter
                     visible: page.sampleCount > 9
-                    font.pixelSize: Theme.fontSizeExtraSmall
+                    font.pixelSize: 16
                     color: Theme.secondaryColor
                 }
             }
@@ -745,4 +744,13 @@ Page {
     }
 
     Component.onCompleted: loadNode()
+
+    // Catch-ALL cancel hook: whichever way this page goes away (back
+    // button, or any future navigation), a running `tailscale ping` must
+    // die with it. Component.onDestruction is a valid QML property in
+    // this Qt 5.6 (MainPage already uses it and it works on the phone);
+    // only the `onDestroyed` signal handler is invalid. This is the
+    // hook that was missing in 0.0.14-12, where ONLY the back button
+    // cancelled — any other way of leaving the page leaked the ping.
+    Component.onDestruction: client.cancelPing("page-destruction")
 }

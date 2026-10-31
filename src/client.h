@@ -3,6 +3,9 @@
 
 #include <QObject>
 
+// Qt::ApplicationState comes from qnamespace.h (via <QObject>); there is
+// no standalone <QApplicationState> header in this Qt 5.6.
+
 class QProcess;
 
 class Client : public QObject
@@ -17,7 +20,14 @@ public:
     Q_INVOKABLE QString getStatusJson() const;
     Q_INVOKABLE bool isUp() const;
     Q_INVOKABLE void startPing(const QString &address, int count);
-    Q_INVOKABLE void cancelPing();
+    // tag: where the cancel came from ("back-button", "stop-button",
+    // "page-destruction", "app-suspended", "internal", "destructor").
+    // It is written into /tmp/harbour-tailscale-ping.log so the phone log
+    // tells us which path actually fired (in 0.0.14-12 the internal and
+    // back-button cancels were indistinguishable).
+    Q_INVOKABLE void cancelPing(const QString &tag);
+    Q_INVOKABLE bool isAutostart() const;
+    Q_INVOKABLE void setAutostart(bool enabled);
     Q_INVOKABLE QString getVersion() const;
     Q_INVOKABLE void up();
     Q_INVOKABLE bool acceptRoutes() const;
@@ -42,6 +52,7 @@ private:
     void onUpFinished(int exitCode);
     void onPingReadyRead();
     void onPingFinished(int exitCode);
+    void onApplicationStateChanged(Qt::ApplicationState state);
 };
 
 #endif // CLIENT_H
