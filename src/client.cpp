@@ -33,6 +33,9 @@
 #include <QSettings>
 #include <QStandardPaths>
 
+#include <cstdio>
+#include <signal.h>
+
 namespace {
 
 QString settingsFilePath()
@@ -40,6 +43,19 @@ QString settingsFilePath()
     const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
     QDir().mkpath(dir);
     return dir + QStringLiteral("/settings.conf");
+}
+
+// Ping lifecycle diagnostics. The phone journal is unreadable
+// (no user journal files) and the app console goes nowhere visible,
+// so the ping start/cancel/finish path is logged to a plain file the
+// user can cat over SSH. Kept minimal on purpose.
+void pingLog(const QString &msg)
+{
+    FILE *f = std::fopen("/tmp/harbour-tailscale-ping.log", "a");
+    if (!f)
+        return;
+    std::fprintf(f, "%s\n", msg.toUtf8().constData());
+    std::fclose(f);
 }
 
 } // namespace
@@ -50,7 +66,11 @@ Client::Client(QObject *parent)
     , m_ping(0)
 {}
 
-Client::~Client() {}
+Client::~Client()
+{
+    // The app exiting must not leave a `tailscale ping` running.
+    cancelPing();
+}
 
 QString Client::getStatus() const
 {
@@ -77,6 +97,7 @@ void Client::startPing(const QString &address, int count)
 {
     cancelPing();
     m_pingBuffer.clear();
+    pingLog(QString("startPing: %1 count=%2").arg(address).arg(count));
 
     m_ping = new QProcess(this);
     m_ping->setProcessChannelMode(QProcess::MergedChannels);
@@ -97,9 +118,23 @@ void Client::startPing(const QString &address, int count)
 void Client::cancelPing()
 {
     if (m_ping) {
+        const qint64 pid = m_ping->processId();
+        const bool wasRunning = (m_ping->state() != QProcess::NotRunning);
+        // kill() = SIGKILL (process group, with direct-pid fallback in
+        // Qt's qprocess_unix). waitForFinished reaps it promptly so the
+        // QProcess (and its output pipes) go away deterministically.
         m_ping->kill();
+        m_ping->waitForFinished(2000);
+        // Belt and braces: signal the pid directly in case the group
+        // signal did not reach it.
+        if (pid > 0)
+            ::kill((pid_t)pid, SIGKILL);
+        pingLog(QString("cancelPing: pid=%1 wasRunning=%2 stateAfter=%3")
+                   .arg(pid).arg(wasRunning).arg((int)m_ping->state()));
         m_ping->deleteLater();
         m_ping = 0;
+    } else {
+        pingLog("cancelPing: no ping process to cancel");
     }
     m_pingBuffer.clear();
 }
@@ -141,7 +176,7 @@ void Client::onPingReadyRead()
 
 void Client::onPingFinished(int exitCode)
 {
-    Q_UNUSED(exitCode);
+    pingLog(QString("onPingFinished: exitCode=%1").arg(exitCode));
 
     // Flush any trailing line that never received a newline
     onPingReadyRead();

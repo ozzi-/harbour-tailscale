@@ -87,9 +87,11 @@ Page {
                 // Going back must not leave a `tailscale ping` running in
                 // the background. (onDestroyed is NOT a valid handler in
                 // Qt 5.6 — compile error "non-existent property" — so the
-                // back button is the hook.)
-                if (page.pinging)
-                    client.cancelPing();
+                // back button is the hook.) cancelPing() is null-safe:
+                // it does nothing when no ping is running, so it is
+                // called UNCONDITIONALLY — gating on page.pinging added a
+                // failure mode for no benefit.
+                client.cancelPing();
                 pageStack.pop()
             }
         }
@@ -475,28 +477,18 @@ Page {
                 // graph ("Direct connection" / "Relayed connection (via
                 // DERP)") — the old legend listed both types under the
                 // graph at the same time and contradicted connLabel, so it
-                // was removed.
-                // The per-bar ms labels (below) live in this bottom strip.
-                Label {
-                    id: maxLabel
-                    anchors {
-                        top: parent.top
-                        left: parent.left
-                    }
-                    text: graphBox.barMax() + " ms"
-                    font.pixelSize: Theme.fontSizeSmall
-                    color: Theme.secondaryColor
-                }
-
+                // was removed. The per-bar ms labels (below) live in the
+                // bottom strip; the old "max ms" label above the bars was
+                // removed per user request (redundant with the per-bar
+                // labels).
                 Rectangle {
                     id: plotArea
                     anchors {
                         left: parent.left
                         right: parent.right
                         top: parent.top
-                        topMargin: maxLabel.height + 6
                         bottom: parent.bottom
-                        bottomMargin: 30   // per-bar ms label strip
+                        bottomMargin: 44   // per-bar ms label strip (clear of the bars)
                     }
                     color: "transparent"
 
@@ -623,16 +615,17 @@ Page {
                     }
                 }
 
-                // Per-bar ms labels, in the 30px strip BELOW the baseline
+                // Per-bar ms labels, in the 44px strip BELOW the baseline
                 // (children of graphBox, not plotArea — anchoring them to
                 // plotArea's bottom would overlap the bars). One per slot,
                 // same x/width as the bar, shown once that ping arrived.
+                // Each label reads e.g. "4 ms".
                 // slot 0
                 Label {
                     anchors.bottom: parent.bottom
                     x: 0 * (graphBox.slotWidth() + 8)
                     width: graphBox.slotWidth()
-                    text: page.sampleCount > 0 ? Math.round(page.graphData[0]) + "" : ""
+                    text: page.sampleCount > 0 ? Math.round(page.graphData[0]) + " ms" : ""
                     horizontalAlignment: Text.AlignHCenter
                     visible: page.sampleCount > 0
                     font.pixelSize: Theme.fontSizeExtraSmall
@@ -643,7 +636,7 @@ Page {
                     anchors.bottom: parent.bottom
                     x: 1 * (graphBox.slotWidth() + 8)
                     width: graphBox.slotWidth()
-                    text: page.sampleCount > 1 ? Math.round(page.graphData[1]) + "" : ""
+                    text: page.sampleCount > 1 ? Math.round(page.graphData[1]) + " ms" : ""
                     horizontalAlignment: Text.AlignHCenter
                     visible: page.sampleCount > 1
                     font.pixelSize: Theme.fontSizeExtraSmall
@@ -654,7 +647,7 @@ Page {
                     anchors.bottom: parent.bottom
                     x: 2 * (graphBox.slotWidth() + 8)
                     width: graphBox.slotWidth()
-                    text: page.sampleCount > 2 ? Math.round(page.graphData[2]) + "" : ""
+                    text: page.sampleCount > 2 ? Math.round(page.graphData[2]) + " ms" : ""
                     horizontalAlignment: Text.AlignHCenter
                     visible: page.sampleCount > 2
                     font.pixelSize: Theme.fontSizeExtraSmall
@@ -665,7 +658,7 @@ Page {
                     anchors.bottom: parent.bottom
                     x: 3 * (graphBox.slotWidth() + 8)
                     width: graphBox.slotWidth()
-                    text: page.sampleCount > 3 ? Math.round(page.graphData[3]) + "" : ""
+                    text: page.sampleCount > 3 ? Math.round(page.graphData[3]) + " ms" : ""
                     horizontalAlignment: Text.AlignHCenter
                     visible: page.sampleCount > 3
                     font.pixelSize: Theme.fontSizeExtraSmall
@@ -676,7 +669,7 @@ Page {
                     anchors.bottom: parent.bottom
                     x: 4 * (graphBox.slotWidth() + 8)
                     width: graphBox.slotWidth()
-                    text: page.sampleCount > 4 ? Math.round(page.graphData[4]) + "" : ""
+                    text: page.sampleCount > 4 ? Math.round(page.graphData[4]) + " ms" : ""
                     horizontalAlignment: Text.AlignHCenter
                     visible: page.sampleCount > 4
                     font.pixelSize: Theme.fontSizeExtraSmall
@@ -687,7 +680,7 @@ Page {
                     anchors.bottom: parent.bottom
                     x: 5 * (graphBox.slotWidth() + 8)
                     width: graphBox.slotWidth()
-                    text: page.sampleCount > 5 ? Math.round(page.graphData[5]) + "" : ""
+                    text: page.sampleCount > 5 ? Math.round(page.graphData[5]) + " ms" : ""
                     horizontalAlignment: Text.AlignHCenter
                     visible: page.sampleCount > 5
                     font.pixelSize: Theme.fontSizeExtraSmall
@@ -698,7 +691,7 @@ Page {
                     anchors.bottom: parent.bottom
                     x: 6 * (graphBox.slotWidth() + 8)
                     width: graphBox.slotWidth()
-                    text: page.sampleCount > 6 ? Math.round(page.graphData[6]) + "" : ""
+                    text: page.sampleCount > 6 ? Math.round(page.graphData[6]) + " ms" : ""
                     horizontalAlignment: Text.AlignHCenter
                     visible: page.sampleCount > 6
                     font.pixelSize: Theme.fontSizeExtraSmall
@@ -709,7 +702,7 @@ Page {
                     anchors.bottom: parent.bottom
                     x: 7 * (graphBox.slotWidth() + 8)
                     width: graphBox.slotWidth()
-                    text: page.sampleCount > 7 ? Math.round(page.graphData[7]) + "" : ""
+                    text: page.sampleCount > 7 ? Math.round(page.graphData[7]) + " ms" : ""
                     horizontalAlignment: Text.AlignHCenter
                     visible: page.sampleCount > 7
                     font.pixelSize: Theme.fontSizeExtraSmall
@@ -720,7 +713,7 @@ Page {
                     anchors.bottom: parent.bottom
                     x: 8 * (graphBox.slotWidth() + 8)
                     width: graphBox.slotWidth()
-                    text: page.sampleCount > 8 ? Math.round(page.graphData[8]) + "" : ""
+                    text: page.sampleCount > 8 ? Math.round(page.graphData[8]) + " ms" : ""
                     horizontalAlignment: Text.AlignHCenter
                     visible: page.sampleCount > 8
                     font.pixelSize: Theme.fontSizeExtraSmall
@@ -731,7 +724,7 @@ Page {
                     anchors.bottom: parent.bottom
                     x: 9 * (graphBox.slotWidth() + 8)
                     width: graphBox.slotWidth()
-                    text: page.sampleCount > 9 ? Math.round(page.graphData[9]) + "" : ""
+                    text: page.sampleCount > 9 ? Math.round(page.graphData[9]) + " ms" : ""
                     horizontalAlignment: Text.AlignHCenter
                     visible: page.sampleCount > 9
                     font.pixelSize: Theme.fontSizeExtraSmall
