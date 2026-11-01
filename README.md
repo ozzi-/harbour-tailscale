@@ -15,7 +15,15 @@ This project **IS NOT** endorsed by Tailscale Inc.
 
 A fork of the original app with additional features:
 
-- _(none yet)_
+- **Device detail page** — tap a device in the list to see its
+  MagicDNS name, IPv4, IPv6, OS, key expiry and status. Tap any
+  address to copy it to the clipboard.
+- **Ping with latency graph** — 10 pings with a live per-bar ms
+  latency graph, the connection type (direct vs relayed via DERP),
+  and a Stop button.
+- **Start at boot** — a Settings switch that enables the `tailscaled`
+  service: it starts at boot and keeps running after the app is
+  closed (daemon mode).
 
 ## Translations
 

@@ -1,3 +1,11 @@
+* Sun Nov 1 2026 Andrea Scarpino <andrea@scarpino.dev> 0.0.15-1
+- Device detail page: tap a device in the list to see its MagicDNS
+  name, IPv4, IPv6, OS, key expiry and status; tap an address to
+  copy it.
+- Ping: 10 pings with a live per-bar ms latency graph, direct vs
+  relayed (via DERP) connection type, and a Stop button.
+- Settings: "Start at boot" — enables the tailscaled service so it
+  starts at boot and keeps running after the app closes.
 * Sat Oct 31 2026 Andrea Scarpino <andrea@scarpino.dev> 0.0.14-14
 - Fix app crash when stopping a running ping or leaving the device
   detail page while a ping is in flight (QProcess::waitForFinished()
