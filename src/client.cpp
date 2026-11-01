@@ -159,10 +159,21 @@ void Client::cancelPing(const QString &tag)
         // signal did not reach it.
         if (pid > 0)
             ::kill((pid_t)pid, SIGKILL);
-        pingLog(QString("cancelPing[%1]: pid=%2 wasRunning=%3 stateAfter=%4")
-                   .arg(tag).arg(pid).arg(wasRunning).arg((int)m_ping->state()));
-        m_ping->deleteLater();
-        m_ping = 0;
+        // NOTE: waitForFinished() runs the event loop, so QProcess::
+        // finished may have already been dispatched here and
+        // onPingFinished() already deleteLater()'d + nulled m_ping.
+        // An unguarded m_ping->deleteLater() below would dereference
+        // NULL and crash the app (the 0.0.14-13 Stop/back crash).
+        if (m_ping)
+            pingLog(QString("cancelPing[%1]: pid=%2 wasRunning=%3 stateAfter=%4")
+                       .arg(tag).arg(pid).arg(wasRunning).arg((int)m_ping->state()));
+        else
+            pingLog(QString("cancelPing[%1]: pid=%2 wasRunning=%3 (finished slot already cleaned up)")
+                       .arg(tag).arg(pid).arg(wasRunning));
+        if (m_ping) {
+            m_ping->deleteLater();
+            m_ping = 0;
+        }
     } else {
         pingLog(QString("cancelPing[%1]: no ping process to cancel").arg(tag));
     }

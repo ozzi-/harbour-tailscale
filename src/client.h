@@ -20,11 +20,12 @@ public:
     Q_INVOKABLE QString getStatusJson() const;
     Q_INVOKABLE bool isUp() const;
     Q_INVOKABLE void startPing(const QString &address, int count);
-    // tag: where the cancel came from ("back-button", "stop-button",
-    // "page-destruction", "app-suspended", "internal", "destructor").
-    // It is written into /tmp/harbour-tailscale-ping.log so the phone log
-    // tells us which path actually fired (in 0.0.14-12 the internal and
-    // back-button cancels were indistinguishable).
+    // tag: where the cancel came from ("stop-button", "page-destruction",
+    // "app-suspended", "internal", "destructor"). The "back-button" tag
+    // existed until 0.0.14-13 when the detail page's back IconButton was
+    // removed (edge-swipe back now triggers "page-destruction"). It is
+    // written into /tmp/harbour-tailscale-ping.log so the phone log tells
+    // us which path actually fired.
     Q_INVOKABLE void cancelPing(const QString &tag);
     Q_INVOKABLE bool isAutostart() const;
     Q_INVOKABLE void setAutostart(bool enabled);

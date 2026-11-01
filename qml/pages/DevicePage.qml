@@ -72,28 +72,13 @@ Page {
         onTriggered: page.copiedRow = -1
     }
 
+    // No back button: SFOS edge-swipe (from the left edge) pops the page,
+    // which fires Component.onDestruction below and cancels any running
+    // ping. (The old IconButton back arrow was removed in 0.0.14-14 as
+    // unneeded.)
     PageHeader {
         id: pageHeader
         title: page.hostname
-
-        IconButton {
-            id: backButton
-            anchors {
-                left: parent.left
-                verticalCenter: parent.verticalCenter
-            }
-            icon.source: "image://theme/icon-m-back"
-            onClicked: {
-                // Going back must not leave a `tailscale ping` running in
-                // the background. cancelPing() is null-safe: it does
-                // nothing when no ping is running, so it is called
-                // UNCONDITIONALLY. The tag is written into the ping log
-                // so we can prove this path fired (in 0.0.14-12 the log
-                // could not distinguish it from the internal cancel).
-                client.cancelPing("back-button");
-                pageStack.pop()
-            }
-        }
     }
 
     Connections {

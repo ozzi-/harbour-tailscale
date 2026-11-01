@@ -1,3 +1,10 @@
+* Sat Oct 31 2026 Andrea Scarpino <andrea@scarpino.dev> 0.0.14-14
+- Fix app crash when stopping a running ping or leaving the device
+  detail page while a ping is in flight (QProcess::waitForFinished()
+  re-enters the finished slot, which had already deleted m_ping;
+  cancelPing now re-checks the pointer before use).
+- Device detail: remove the back arrow from the page header (SFOS
+  edge-swipe still pops the page and cancels a running ping).
 * Sat Oct 31 2026 Andrea Scarpino <andrea@scarpino.dev> 0.0.14-13
 - Settings: "Start at boot" — enables the tailscaled.service unit
   (systemctl enable) and keeps the daemon running after the app closes.
