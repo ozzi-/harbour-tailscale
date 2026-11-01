@@ -46,16 +46,9 @@ QString settingsFilePath()
     return dir + QStringLiteral("/settings.conf");
 }
 
-// Ping lifecycle diagnostics. The phone journal is unreadable
-// (no user journal files) and the app console goes nowhere visible,
-// so the ping start/cancel/finish path is logged to a plain file the
-// user can cat over SSH. Kept minimal on purpose.
-// Every line is timestamped (HH:mm:ss.mmm) and every cancelPing carries
-// a caller tag, so the log unambiguously shows WHICH path cancelled the
-// ping (back button vs stop button vs page destruction vs app suspend)
-// and WHEN. (In 0.0.14-12 the internal and back-button cancels were
-// indistinguishable, which made the "cancel doesn't work" report
-// impossible to diagnose from the log alone.)
+// Ping lifecycle diagnostics: every line is timestamped and every
+// cancelPing carries a caller tag, so the log shows which path
+// cancelled the ping and when.
 void pingLog(const QString &msg)
 {
     FILE *f = std::fopen("/tmp/harbour-tailscale-ping.log", "a");
@@ -74,15 +67,8 @@ Client::Client(QObject *parent)
     , m_cmd(0)
     , m_ping(0)
 {
-    // If the app leaves the foreground (user swiped to home / another
-    // app), a running `tailscale ping` must not keep running in the
-    // background — that is the path that leaked pings across page
-    // navigations in 0.0.14-12: the in-app back button was not the only
-    // way to leave the device page. Silica's ApplicationWindow binds
-    // `applicationActive` to Qt.application.active, so lipstick
-    // definitely drives these state changes on this Qt 5.6.
-    // Qt 5.6 has no qGuiApplication() function — only the qGuiApp macro
-    // (static_cast of QCoreApplication::instance()).
+    // A running `tailscale ping` must not keep running in the
+    // background when the app leaves the foreground.
     connect(qGuiApp, &QGuiApplication::applicationStateChanged,
             this, &Client::onApplicationStateChanged);
 }
@@ -134,9 +120,9 @@ void Client::startPing(const QString &address, int count)
     connect(m_ping, &QProcess::readyReadStandardOutput, this, &Client::onPingReadyRead);
     connect(m_ping, (void (QProcess::*)(int)) &QProcess::finished, this, &Client::onPingFinished);
 
-    // --until-direct=false: force ALL <count> pings. By default `tailscale ping`
-    // stops as soon as a direct (non-DERP) path is found, which would give far
-    // fewer samples than requested (we saw "1 of 10" on relayed links).
+    // --until-direct=false: by default `tailscale ping` stops as soon as a
+    // direct (non-DERP) path is found, which would give fewer samples
+    // than requested.
     m_ping->start(QStringLiteral("/usr/bin/tailscale"),
                   QStringList() << QStringLiteral("ping")
                                 << QStringLiteral("--c=%1").arg(count)
@@ -159,11 +145,9 @@ void Client::cancelPing(const QString &tag)
         // signal did not reach it.
         if (pid > 0)
             ::kill((pid_t)pid, SIGKILL);
-        // NOTE: waitForFinished() runs the event loop, so QProcess::
-        // finished may have already been dispatched here and
-        // onPingFinished() already deleteLater()'d + nulled m_ping.
-        // An unguarded m_ping->deleteLater() below would dereference
-        // NULL and crash the app (the 0.0.14-13 Stop/back crash).
+        // waitForFinished() runs the event loop, so QProcess::finished
+        // may already have been dispatched and onPingFinished() may have
+        // already deleted m_ping — re-check the pointer before use.
         if (m_ping)
             pingLog(QString("cancelPing[%1]: pid=%2 wasRunning=%3 stateAfter=%4")
                        .arg(tag).arg(pid).arg(wasRunning).arg((int)m_ping->state()));

@@ -308,9 +308,8 @@ Page {
     }
 
     Component.onDestruction: {
-        // "Start at boot" (settings) means the daemon is meant to live
-        // independently of the app — do NOT stop it when the app closes.
-        // Otherwise keep the 0.0.8 behavior: stop the daemon on close.
+        // With "Start at boot" enabled the daemon is meant to live
+        // independently of the app — do not stop it when the app closes.
         if (client.isAutostart())
             return;
 

@@ -29,11 +29,8 @@ Page {
     property string nodeIp: ""
     property bool isSelf: false
 
-    // Node data (populated by loadNode()). Plain string/bool properties:
-    // every row below is a fixed item bound to them. Deliberately NO
-    // Repeater/JS-array model: on SFOS 5.2 (Qt 5.6) a Repeater with a JS
-    // array model reports the right count but never instantiates delegate
-    // items, which left the rows blank on the phone.
+    // Node data (populated by loadNode()). Fixed items below, one per
+    // field, instead of a Repeater.
     property bool hasData: false
     property string dnsName: ""
     property string ip4: ""
@@ -57,13 +54,10 @@ Page {
     // 0=dns 1=ipv4 2=ipv6, -1=none. Drives the "Copied" caption flash.
     property int copiedRow: -1
 
-    // Single source of truth for the content's top offset. The 140px
-    // floor GUARANTEES the first rows clear the header + camera notch
-    // even if the header item's height ever evaluates small/zero; the
-    // header term keeps the content below a taller header. Do NOT use
-    // Theme.pageHeaderHeight (does not exist in Silica 5.2 → NaN → the
-    // whole binding silently fails → content renders at y=0; that is
-    // the -6..-10 cutoff bug).
+    // Top offset for the content: the constant floor keeps the first
+    // rows clear of the header and the camera notch even if the header
+    // height evaluates small. (Theme.pageHeaderHeight does not exist in
+    // this Silica version — binding to it would silently fail.)
     readonly property real contentTop: Math.max(pageHeader.height + Theme.paddingLarge, 140)
 
     Timer {
@@ -72,10 +66,6 @@ Page {
         onTriggered: page.copiedRow = -1
     }
 
-    // No back button: SFOS edge-swipe (from the left edge) pops the page,
-    // which fires Component.onDestruction below and cancels any running
-    // ping. (The old IconButton back arrow was removed in 0.0.14-14 as
-    // unneeded.)
     PageHeader {
         id: pageHeader
         title: page.hostname
@@ -173,8 +163,6 @@ Page {
     SilicaFlickable {
         anchors.fill: parent
         visible: page.hasData
-        // contentTop carries the guaranteed floor (see page.contentTop):
-        // the content can never end up at y=0 under the header/notch.
         contentHeight: page.contentTop
                         + contentColumn.implicitHeight
                         + Theme.paddingLarge
@@ -184,11 +172,6 @@ Page {
             anchors {
                 left: parent.left
                 right: parent.right
-                // top: parent.top + a CONSTANT-guaranteed margin (page.contentTop).
-                // No cross-item anchor, no Theme constant that might not exist:
-                // a failed binding here silently leaves the margin at 0 and
-                // the content renders at the very top of the screen (the bug
-                // that survived builds -6..-10).
                 top: parent.top
                 topMargin: page.contentTop
                 leftMargin: Theme.horizontalPageMargin
@@ -401,9 +384,7 @@ Page {
                 }
             }
 
-            // Immediate feedback: an offline peer produces ZERO samples
-            // (`tailscale ping` prints "timed out / no reply", exit 1),
-            // so without this the Ping button looked dead for ~40 s.
+            // Feedback while waiting, and when the peer never answers.
             Label {
                 id: noResponseLabel
                 width: contentColumn.width
@@ -427,14 +408,9 @@ Page {
                 color: page.lastRelayed ? Theme.secondaryHighlightColor : Theme.highlightColor
             }
 
-            // Latency graph: 10 fixed bars (one per ping slot). Pure
-            // Rectangles with explicit x + bottom anchor — NO Row (its
-            // baseline alignment silently bottom-aligned the bars and broke
-            // the intended layout), NO Repeater (JS-array model is broken on
-            // this Qt), NO Canvas.
-            // Orientation per user request: the duration grows toward the
-            // TOP — 0 ms baseline at the bottom, max ms at the top (the same
-            // chart as the Android Tailscale app).
+            // Latency graph: one fixed bar per ping slot, explicitly
+            // positioned (no Row: its baseline alignment fights the
+            // bottom-anchored bars). Bars grow up from the bottom baseline.
             Item {
                 id: graphBox
                 width: contentColumn.width
@@ -457,14 +433,6 @@ Page {
                     return Math.max(4, (v / graphBox.barMax()) * (plotArea.height - 8));
                 }
 
-                // Connection type is shown ONCE, by connLabel above the
-                // graph ("Direct connection" / "Relayed connection (via
-                // DERP)") — the old legend listed both types under the
-                // graph at the same time and contradicted connLabel, so it
-                // was removed. The per-bar ms labels (below) live in the
-                // bottom strip; the old "max ms" label above the bars was
-                // removed per user request (redundant with the per-bar
-                // labels).
                 Rectangle {
                     id: plotArea
                     anchors {
@@ -493,10 +461,6 @@ Page {
                         color: Theme.rgba(Theme.primaryColor, 0.25)
                     }
 
-                    // 10 fixed bars, each individually positioned: explicit
-                    // x, bottom-anchored, growing UP. No Row: Row baseline
-                    // alignment made "anchored" bars render bottom-aligned
-                    // and broke the intended layout in 0.0.14-9.
                     // slot 0
                     Rectangle {
                         anchors.bottom: parent.bottom
@@ -599,11 +563,7 @@ Page {
                     }
                 }
 
-                // Per-bar ms labels, in the 44px strip BELOW the baseline
-                // (children of graphBox, not plotArea — anchoring them to
-                // plotArea's bottom would overlap the bars). One per slot,
-                // same x/width as the bar, shown once that ping arrived.
-                // Each label reads e.g. "4 ms".
+                // Per-bar ms labels in the strip below the baseline.
                 // slot 0
                 Label {
                     anchors.bottom: parent.bottom
@@ -730,12 +690,8 @@ Page {
 
     Component.onCompleted: loadNode()
 
-    // Catch-ALL cancel hook: whichever way this page goes away (back
-    // button, or any future navigation), a running `tailscale ping` must
-    // die with it. Component.onDestruction is a valid QML property in
-    // this Qt 5.6 (MainPage already uses it and it works on the phone);
-    // only the `onDestroyed` signal handler is invalid. This is the
-    // hook that was missing in 0.0.14-12, where ONLY the back button
-    // cancelled — any other way of leaving the page leaked the ping.
+    // Whichever way this page goes away, a running `tailscale ping`
+    // must die with it. (Component.onDestruction, not onDestroyed, which
+    // does not exist in this Qt.)
     Component.onDestruction: client.cancelPing("page-destruction")
 }
