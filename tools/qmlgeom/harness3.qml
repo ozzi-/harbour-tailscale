@@ -9,8 +9,8 @@ Item {
         id: dp
         width: 360
         height: 720
-        hostname: "jp"
-        nodeIp: "100.85.223.71"
+        hostname: "laptop"
+        nodeIp: "100.64.0.1"
         isSelf: true
     }
 }

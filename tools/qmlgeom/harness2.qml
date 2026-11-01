@@ -9,8 +9,8 @@ Item {
         id: dp
         width: 360
         height: 720
-        hostname: "truenas-scale"
-        nodeIp: "100.92.130.114"
+        hostname: "nas"
+        nodeIp: "100.64.0.2"
         isSelf: false
     }
 
